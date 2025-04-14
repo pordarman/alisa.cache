@@ -1,0 +1,49 @@
+{
+  "name": "alisa.cache",
+  "version": "1.0.1",
+  "description": "Advanced and flexible JavaScript cache module with TTL, LRU/FIFO/MFU, tagging, namespacing, event system, and full snapshot support.",
+  "main": "index.js",
+  "type": "module",
+  "exports": {
+    "require": "./index.js",
+    "import": "./index.mjs"
+  },
+  "types": "./index.t.ts",
+  "typesVersions": {
+    "*": {
+      "index": [
+        "./index.t.ts"
+      ],
+      "index.mjs": [
+        "./index.d.mts"
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node index.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pordarman/alisa.cache.git"
+  },
+  "keywords": [
+    "cache",
+    "alisa",
+    "javascript",
+    "ttl",
+    "lru",
+    "fifo",
+    "mfu",
+    "memory",
+    "event",
+    "tag",
+    "namespace",
+    "snapshot"
+  ],
+  "author": "Ali İhsan Çelik",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/pordarman/alisa.cache/issues"
+  },
+  "homepage": "https://github.com/pordarman/alisa.cache#readme"
+}
