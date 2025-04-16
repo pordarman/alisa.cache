@@ -1,6 +1,6 @@
 {
   "name": "alisa.cache",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Advanced and flexible JavaScript cache module with TTL, LRU/FIFO/MFU, tagging, namespacing, event system, and full snapshot support.",
   "main": "index.js",
   "type": "module",
@@ -40,7 +40,10 @@
     "namespace",
     "snapshot"
   ],
-  "author": "Ali İhsan Çelik",
+  "author": {
+    "email": "ali.taha.celik@gmail.com",
+    "name": "Ali İhsan Çelik"
+  },
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/pordarman/alisa.cache/issues"

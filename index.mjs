@@ -1,11 +1,12 @@
 // @ts-check
 "use strict";
-import CacheError from "./CacheError.mjs";
+import CacheError from "./CacheError.js";
 const validStrategies = ["LRU", "FIFO", "MFU", "CUSTOM"];
 
 /**
  * @typedef {Object} AlisaCacheOptions
  * @property {number} [limit=100] - Maximum number of items the cache can store.
+ * @property {number} [ttl] - Time to live in milliseconds.
  * @property {boolean} [updateOnGet=false] - Whether accessing a key should update its position (LRU behavior).
  * @property {boolean} [updateOnHas=false] - Whether checking a key should update its position (LRU behavior).
  * @property {boolean} [cloneOnGet=false] - Whether to return a clone of the value when getting it.
@@ -25,6 +26,7 @@ class AlisaCache {
     constructor(options = {}) {
         const {
             limit = 100,
+            ttl,
             updateOnGet = false,
             updateOnHas = false,
             cloneOnGet = false,
@@ -46,6 +48,7 @@ class AlisaCache {
         }
 
         this.limit = limit; // Maximum number of items the cache can store
+        this.ttl = ttl; // Time to live in milliseconds (not used in this version)
         this.updateOnGet = updateOnGet; // Whether accessing a key should update its position (LRU behavior)
         this.updateOnHas = updateOnHas; // Whether checking a key should update its position (LRU behavior)
         this.cloneOnGet = cloneOnGet; // Whether to return a clone of the value when getting it
@@ -239,6 +242,9 @@ class AlisaCache {
             priority = 0,
             tags = [],
         } = options;
+        if (!Array.isArray(tags)) throw new CacheError("`tags` must be an array of strings.");
+
+        const defaultTTL = ttl || this.ttl;
 
         if (!this.overWrite && this.store.has(key)) return this;
 
@@ -249,13 +255,12 @@ class AlisaCache {
         this.store.set(key, value);
         this.meta.set(key, Date.now());
 
-        if (typeof ttl === "number" && ttl > 0) {
-            this.ttlMap.set(key, Date.now() + ttl);
+        if (typeof defaultTTL === "number" && defaultTTL > 0) {
+            this.ttlMap.set(key, Date.now() + defaultTTL);
         } else {
             this.ttlMap.delete(key);
         }
 
-        if (!Array.isArray(tags)) throw new CacheError("`tags` must be an array of strings.");
         const tagSet = new Set(tags.map(String));
         this.keyTags.set(key, tagSet);
         for (const tag of tagSet) {
@@ -263,7 +268,7 @@ class AlisaCache {
             this.tagMap.get(tag)?.add(key);
         }
 
-        this.emit("set", { key, value, ttl, tags, priority });
+        this.emit("set", { key, value, ttl: defaultTTL, tags, priority });
         return this;
     }
 
@@ -437,7 +442,7 @@ class AlisaCache {
      * @example
      * const timeLeft = cache.ttl("user:123"); // e.g., 4242 ms
      */
-    ttl(key) {
+    ttlExpire(key) {
         const expireAt = this.ttlMap.get(key);
         if (!this.store.has(key) || !expireAt) return -1;
 
@@ -878,7 +883,7 @@ class AlisaCache {
         const totalSize = jsonSizes.reduce((a, b) => a + b, 0);
         const avgValueSize = keyCount ? totalSize / keyCount : 0;
 
-        const activeTTLKeys = [...this.ttlMap.keys()].filter(k => this.ttl(k) > 0);
+        const activeTTLKeys = [...this.ttlMap.keys()].filter(k => this.ttlExpire(k) > 0);
         const ttlCount = activeTTLKeys.length;
 
         return {
@@ -987,7 +992,7 @@ class AlisaCache {
 
             case "MFU":
                 const freqMap = new Map();
-                for (const [key, timestamp] of this.meta.entries()) {
+                for (const [key] of this.meta.entries()) {
                     freqMap.set(key, (freqMap.get(key) || 0) + 1);
                 }
                 const mfuKey = [...freqMap.entries()]

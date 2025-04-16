@@ -13,7 +13,7 @@ assert.strictEqual(cache.has("key1"), false);
 
 // TTL & EXPIRE
 cache.set("temp", "value", { ttl: 1000 });
-assert.ok(cache.ttl("temp") > 0);
+assert.ok(cache.ttlExpire("temp") > 0);
 cache.expire("temp");
 assert.strictEqual(cache.get("temp"), undefined);
 
