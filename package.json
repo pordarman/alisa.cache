@@ -1,6 +1,6 @@
 {
   "name": "alisa.cache",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Advanced and flexible JavaScript cache module with TTL, LRU/FIFO/MFU, tagging, namespacing, event system, and full snapshot support.",
   "main": "index.js",
   "type": "module",
@@ -8,11 +8,11 @@
     "require": "./index.js",
     "import": "./index.mjs"
   },
-  "types": "./index.t.ts",
+  "types": "./index.d.ts",
   "typesVersions": {
     "*": {
       "index": [
-        "./index.t.ts"
+        "./index.d.ts"
       ],
       "index.mjs": [
         "./index.d.mts"

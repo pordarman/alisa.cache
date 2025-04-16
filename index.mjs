@@ -1,6 +1,6 @@
 // @ts-check
 "use strict";
-import CacheError from "./CacheError.js";
+import CacheError from "./CacheError.mjs";
 const validStrategies = ["LRU", "FIFO", "MFU", "CUSTOM"];
 
 /**
@@ -84,6 +84,13 @@ class AlisaCache {
          * @private
          */
         this.ttlMap = new Map(); // key -> expiration timestamp
+
+        /**
+         * @type {Map<any, number>}
+         * @private
+         */
+        this.priorityMap = new Map(); // key -> priority value
+
 
         /**
          * Map of tags to sets of keys.
@@ -232,7 +239,7 @@ class AlisaCache {
       * @param {any} value - Value to cache.
       * @param {Object} [options={}]
       * @param {number} [options.ttl] - Time to live in milliseconds.
-      * @param {number} [options.priority] - Priority of the key (not used in this version).
+      * @param {number} [options.priority] - Priority level (higher = less likely to be evicted).
       * @param {string[]} [options.tags] - List of tags to associate with this key.
       * @returns {this}
       */
@@ -242,7 +249,12 @@ class AlisaCache {
             priority = 0,
             tags = [],
         } = options;
+
         if (!Array.isArray(tags)) throw new CacheError("`tags` must be an array of strings.");
+
+        if (typeof priority === "number") {
+            this.priorityMap.set(key, priority);
+        }
 
         const defaultTTL = ttl || this.ttl;
 
@@ -352,6 +364,7 @@ class AlisaCache {
         const existed = this.store.delete(key);
         this.meta.delete(key);
         this.ttlMap.delete(key);
+        this.priorityMap.delete(key);
 
         const tags = this.keyTags.get(key);
         if (tags) {
@@ -430,6 +443,7 @@ class AlisaCache {
         this.ttlMap.clear();
         this.tagMap.clear();
         this.keyTags.clear();
+        this.priorityMap.clear();
 
         this.emit("flush", {});
     }
@@ -760,7 +774,8 @@ class AlisaCache {
     *   evictions: number,
     *   strategy: string,
     *   tagCount: number,
-    *   tags: string[]
+    *   tags: string[],
+    *   priority: { average: number }
     * }}
     * @example
     * cache.stats();
@@ -784,7 +799,12 @@ class AlisaCache {
             evictions: this.evictions,
             strategy: this.strategy,
             tagCount: this.tagMap.size,
-            tags: [...this.tagMap.keys()]
+            tags: [...this.tagMap.keys()],
+            priority: {
+                average: this.priorityMap.size
+                  ? [...this.priorityMap.values()].reduce((a, b) => a + b, 0) / this.priorityMap.size
+                  : 0
+              }
         };
     }
 
@@ -943,7 +963,7 @@ class AlisaCache {
         this.hits = hits;
         this.misses = misses;
         this.evictions = evictions;
-
+        
         return this;
     }
 
@@ -974,41 +994,31 @@ class AlisaCache {
      * @private
      */
     evict() {
-        // Check if the cache is not full
-        if (this.store.size < this.limit) return;
-
-        this.evictions++;
-        switch (this.strategy) {
-            case "LRU":
-                const lruKey = [...this.meta.entries()]
-                    .sort((a, b) => a[1] - b[1])[0]?.[0];
-                if (lruKey !== undefined) this.delete(lruKey);
-                break;
-
-            case "FIFO":
-                const firstKey = this.store.keys().next().value;
-                if (firstKey !== undefined) this.delete(firstKey);
-                break;
-
-            case "MFU":
-                const freqMap = new Map();
-                for (const [key] of this.meta.entries()) {
-                    freqMap.set(key, (freqMap.get(key) || 0) + 1);
-                }
-                const mfuKey = [...freqMap.entries()]
-                    .sort((a, b) => b[1] - a[1])[0]?.[0];
-                if (mfuKey !== undefined) this.delete(mfuKey);
-                break;
-
-            case "CUSTOM":
-                if (typeof this.customEvict === "function") {
-                    this.customEvict(this.store, this.meta);
-                }
-                break;
-
-            default:
-                throw new CacheError(`Unknown eviction strategy: ${this.strategy}`);
+        if (this.customEvict && typeof this.customEvict === "function") {
+            this.customEvict(this.store, this.meta);
+            return;
         }
+    
+        const entries = [...this.store.entries()];
+        if (!entries.length) return;
+    
+        entries.sort(([aKey, aVal], [bKey, bVal]) => {
+            const aPrio = this.priorityMap.get(aKey) || 0;
+            const bPrio = this.priorityMap.get(bKey) || 0;
+            if (aPrio !== bPrio) return aPrio - bPrio;
+    
+            // Secondary sort by strategy
+            const aTime = this.meta.get(aKey) || 0;
+            const bTime = this.meta.get(bKey) || 0;
+            if (this.strategy === "LRU") return aTime - bTime;
+            if (this.strategy === "MFU") return bTime - aTime;
+            if (this.strategy === "FIFO") return aTime - bTime;
+            return 0;
+        });
+    
+        const [evictKey] = entries[0];
+        this.delete(evictKey);
+        this.evictions++;
     }
     // #endregion
 

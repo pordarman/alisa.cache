@@ -1,9 +1,8 @@
-import type { EventEmitter } from "events";
-
 export type CacheStrategy = "LRU" | "FIFO" | "MFU" | "CUSTOM";
 
 export interface AlisaCacheOptions {
   limit?: number;
+  ttl?: number;
   updateOnGet?: boolean;
   updateOnHas?: boolean;
   cloneOnGet?: boolean;
