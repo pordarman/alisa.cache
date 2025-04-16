@@ -38,7 +38,7 @@ export default class AlisaCache {
   delete(key: any): boolean;
   flush(): void;
   size(): number;
-  ttl(key: any): number;
+  ttlExpire(key: any): number;
   expire(key: any): boolean;
   rename(oldKey: any, newKey: any): boolean;
 
