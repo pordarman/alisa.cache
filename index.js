@@ -2,6 +2,7 @@
 "use strict";
 const CacheError = require("./CacheError.js");
 const validStrategies = ["LRU", "FIFO", "MFU", "CUSTOM"];
+const fs = require("fs");
 
 /**
  * @typedef {Object} AlisaCacheOptions
@@ -11,8 +12,8 @@ const validStrategies = ["LRU", "FIFO", "MFU", "CUSTOM"];
  * @property {boolean} [updateOnHas=false] - Whether checking a key should update its position (LRU behavior).
  * @property {boolean} [cloneOnGet=false] - Whether to return a clone of the value when getting it.
  * @property {boolean} [overWrite=true] - Whether to overwrite existing keys.
- * @property {"LRU" | "FIFO" | "MFU" | "CUSTOM"} [strategy="LRU"] - Cache eviction strategy.
- * @property {Function} [customEvict] - Custom eviction function when using "CUSTOM" strategy.
+ * @property {"LRU" | "FIFO" | "LIFO" | "MFU" | "RANDOM" | "CUSTOM"} [strategy="LRU"] - Cache eviction strategy.
+ * @property {Function} [customEvict] - Custom eviction function when using "CUSTOM" strategy. It should return the key to evict.
  */
 
 /**
@@ -54,7 +55,7 @@ class AlisaCache {
         this.cloneOnGet = cloneOnGet; // Whether to return a clone of the value when getting it
         this.overWrite = overWrite; // Whether to overwrite existing keys
         this.strategy = strategy; // Cache eviction strategy
-        this.customEvict = customEvict; // Custom eviction function when using "CUSTOM" strategy
+        this.customEvict = customEvict; // Custom eviction function when using "CUSTOM" strategy. It should return the key to evict.
 
         this.hits = 0; // Cache hits
         this.misses = 0; // Cache misses
@@ -119,6 +120,13 @@ class AlisaCache {
          * @private
          */
         this.namespaces = new Map();
+
+        /**
+         * Set of keys that cannot be deleted.
+         * @type {Set<any>}
+         * @private
+         */
+        this.protectedKeys = new Set(); // Protected keys that cannot be deleted
     }
     // #endregion
 
@@ -361,6 +369,8 @@ class AlisaCache {
      * cache.delete("user:1"); // true
      */
     delete(key) {
+        if (this.protectedKeys.has(key)) return false;
+
         const existed = this.store.delete(key);
         this.meta.delete(key);
         this.ttlMap.delete(key);
@@ -408,6 +418,7 @@ class AlisaCache {
      * cache.rename("u:1", "user:1");
      */
     rename(oldKey, newKey) {
+        if (this.protectedKeys.has(oldKey) || this.protectedKeys.has(newKey)) return false;
         if (!this.store.has(oldKey) || this.store.has(newKey)) return false;
 
         const value = this.store.get(oldKey);
@@ -430,6 +441,40 @@ class AlisaCache {
         return true;
     }
 
+    /**
+     * Protects a key from being deleted or evicted.
+     * @param {any} key - The key to protect.
+     * @returns {this}
+     * @example
+     * cache.protect("user:1"); // Protects the key "user:1" from deletion
+     */
+    protect(key) {
+        if (this.store.has(key)) this.protectedKeys.add(key);
+        return this;
+    }
+
+    /**
+     * Unprotects a key, allowing it to be deleted or evicted.
+     * @param {any} key - The key to unprotect.
+     * @returns {this}
+     * @example
+     * cache.unprotect("user:1"); // Unprotects the key "user:1"
+     */
+    unprotect(key) {
+        if (this.store.has(key)) this.protectedKeys.delete(key);
+        return this;
+    }
+
+    /**
+     * Checks if a key is protected from deletion or eviction.
+     * @param {any} key - The key to check.
+     * @returns {boolean} - Whether the key is protected.
+     * @example
+     * cache.isProtected("user:1"); // true or false
+     */
+    ifProtected(key) {
+        return this.protectedKeys.has(key);
+    }
 
     /**
      * Removes all data from the cache, including metadata, TTLs, and tags.
@@ -480,7 +525,7 @@ class AlisaCache {
             }
         }
 
-        this.emit("prune", removed);
+        this.emit("prune", { removed });
         return removed;
     }
 
@@ -500,7 +545,7 @@ class AlisaCache {
 
         this._autoPruneIntervalId = setInterval(() => {
             const removed = this.prune?.(); // varsa çağır
-            this.emit("autoPrune", removed);
+            this.emit("autoPrune", { removed });
         }, intervalMs);
 
         return this;
@@ -802,9 +847,9 @@ class AlisaCache {
             tags: [...this.tagMap.keys()],
             priority: {
                 average: this.priorityMap.size
-                  ? [...this.priorityMap.values()].reduce((a, b) => a + b, 0) / this.priorityMap.size
-                  : 0
-              }
+                    ? [...this.priorityMap.values()].reduce((a, b) => a + b, 0) / this.priorityMap.size
+                    : 0
+            }
         };
     }
 
@@ -986,39 +1031,95 @@ class AlisaCache {
         return this.loadSnapshot(json);
     }
 
+    /**
+     * Saves the cache to a file in JSON format.
+     * @param {string} path - The file path to save the cache.
+     * @returns {Promise<void>}
+     * @example
+     * await cache.saveToFile("./cache.json");
+     * fs.writeFileSync("./cache.json", JSON.stringify(cache.toJSON(), null, 2));
+     */
+    async saveToFile(path) {
+        if (typeof path !== "string" || !path.length) {
+            throw new CacheError("File path must be a non-empty string.");
+        }
+
+        const json = JSON.stringify(this.toJSON(), null, 2);
+        await fs.promises.writeFile(path, json, "utf-8");
+    }
+
+    /**
+    * Loads cache data from a JSON file.
+    * @param {string} path - The file path to load the cache from.
+    * @returns {Promise<AlisaCache>} - The loaded cache instance.
+    * @example
+    * const cache = await AlisaCache.loadFromFile("./cache.json");
+    */
+    async loadFromFile(path) {
+        const data = await fs.promises.readFile(path, "utf-8");
+        const json = JSON.parse(data);
+        return this.fromJSON(json);
+    }
+
     // #endregion
 
     // #region Eviction Strategies
     /**
      * Execute eviction based on selected strategy.
+     * @returns {boolean}
      * @private
      */
     evict() {
         if (this.customEvict && typeof this.customEvict === "function") {
-            this.customEvict(this.store, this.meta);
-            return;
+            const key = this.customEvict(this.store, this.meta);
+            if (this.store.has(key)) {
+                this.delete(key);
+                this.evictions++;
+                this.emit("evict", { key });
+                return true;
+            }
+            return false;
         }
-    
+
         const entries = [...this.store.entries()];
-        if (!entries.length) return;
-    
+        if (!entries.length) return false;
+
         entries.sort(([aKey, aVal], [bKey, bVal]) => {
+            // If the the key is protected, it should be sorted to the end
+            if (this.protectedKeys.has(aKey)) return 1;
+            if (this.protectedKeys.has(bKey)) return -1;
+
+            // Primary sort by priority
             const aPrio = this.priorityMap.get(aKey) || 0;
             const bPrio = this.priorityMap.get(bKey) || 0;
             if (aPrio !== bPrio) return aPrio - bPrio;
-    
+
             // Secondary sort by strategy
             const aTime = this.meta.get(aKey) || 0;
             const bTime = this.meta.get(bKey) || 0;
-            if (this.strategy === "LRU") return aTime - bTime;
-            if (this.strategy === "MFU") return bTime - aTime;
-            if (this.strategy === "FIFO") return aTime - bTime;
-            return 0;
+            switch (this.strategy) {
+                case "LRU":
+                case "FIFO":
+                    return aTime - bTime; // LRU and FIFO sort by last access time
+
+                case "LIFO":
+                case "MFU":
+                    return bTime - aTime; // LIFO and MFU sort by last access time in reverse
+
+                case "RANDOM":
+                    return Math.random() - Math.random(); // Randomly sort
+
+                default:
+                    return 0; // Default to no sorting
+            }
         });
-    
+
         const [evictKey] = entries[0];
+        if (this.protectedKeys.has(evictKey)) return false;
         this.delete(evictKey);
         this.evictions++;
+        this.emit("evict", { key: evictKey });
+        return true;
     }
     // #endregion
 

@@ -1,4 +1,4 @@
-export type CacheStrategy = "LRU" | "FIFO" | "MFU" | "CUSTOM";
+export type CacheStrategy = "LRU" | "FIFO" | "MFU" | "RANDOM" | "CUSTOM";
 
 export interface AlisaCacheOptions {
   limit?: number;
@@ -23,8 +23,9 @@ export interface EmitPayloads {
   delete: { key: any; success: boolean };
   has: { key: any; found: boolean };
   flush: Record<string, never>;
-  prune: number;
-  autoPrune: number;
+  prune: { removed: number };
+  autoPrune: { removed: number };
+  evict: { key: any };
 }
 
 export default class AlisaCache {
