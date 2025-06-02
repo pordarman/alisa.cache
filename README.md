@@ -69,11 +69,42 @@
 
 ```js
 const AlisaCache = require("alisa.cache");
-const cache = new AlisaCache({ limit: 100 });
+const cache = new AlisaCache({ limit: 100, ttl: 6000 });
 
 cache.set("user:1", { name: "Alice" }, { ttl: 5000, tags: ["admin"] });
-
 console.log(cache.get("user:1")); // { name: "Alice" }
+
+cache.set("owner", { name: "Tom", role: "owner" }, { tags: ["owner"] })
+
+cache.protect("owner");
+cache.delete("owner"); // false, owner is still there
+
+await cache.saveToFile("./cache.json");
+await cache.loadFromFile("./cache.json");
+```
+
+<br>
+
+# Real-world example: Discord bot prefix per guild
+
+```js
+const cache = new AlisaCache({ limit: 500 });
+
+function onMessage(msg) {
+  const guildId = msg.guild?.id;
+  if (!guildId) return;
+
+  const guildCache = cache.namespace(guildId);
+  const prefix = guildCache.get("prefix") || "!";
+
+  if (msg.content.startsWith(prefix)) {
+    const command = msg.content.slice(prefix.length).split(" ")[0];
+    console.log(`Command received: ${command}`);
+  }
+}
+
+// Setup example
+cache.namespace("1234").set("prefix", ".");
 ```
 
 <br>
@@ -110,6 +141,10 @@ If all goes well, you'll see:
 | `snapshot()`           | Export cache state                     |
 | `loadSnapshot(obj)`    | Restore from snapshot                  |
 | `on(event, cb)`        | Register listener                      |
+| `protect(key)`         | Prevent a key from being removed       |
+| `unprotect(key)`       | Remove protection from a key           |
+| `saveToFile(path)`     | Save cache as JSON file                |
+| `loadFromFile(path)`   | Load cache from JSON file              |
 
 <br>
 

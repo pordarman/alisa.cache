@@ -1,6 +1,6 @@
 // @ts-check
 "use strict";
-import CacheError from "./CacheError.js";
+import CacheError from "./CacheError.mjs";
 const validStrategies = ["LRU", "FIFO", "MFU", "CUSTOM"];
 import { promises } from "fs";
 

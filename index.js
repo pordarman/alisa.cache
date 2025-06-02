@@ -993,7 +993,7 @@ class AlisaCache {
      * cache.loadSnapshot(dump);
      */
     loadSnapshot(snapshot) {
-        if (!snapshot || typeof snapshot !== "object") throw new CacheError("Invalid snapshot");
+        if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) throw new CacheError("Invalid snapshot");
 
         this.flush(); // clear existing data
 
