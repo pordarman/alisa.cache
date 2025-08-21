@@ -1,6 +1,6 @@
 ## [![Alisa Logo](https://i.hizliresim.com/aug2sp9.png)](https://www.npmjs.com/package/alisa.cache/)
 
-[![Package Name](https://img.shields.io/badge/alisa.cache?logo=npm&logoColor=red&label=Package%20name&color=redd)](https://www.npmjs.com/package/alisa.cache/)
+[![Package Name](https://img.shields.io/badge/alisa.cache?logo=npm&logoColor=red&label=Package%20name&color=red)](https://www.npmjs.com/package/alisa.cache/)
 [![Package size](https://img.shields.io/bundlejs/size/alisa.cache?label=Package%20size)](https://www.npmjs.com/package/alisa.cache/)
 [![Version](https://img.shields.io/npm/v/alisa.cache.svg?label=Package%20version)](https://www.npmjs.com/package/alisa.cache/)
 [![License](https://img.shields.io/npm/l/alisa.cache.svg?label=License)](https://www.npmjs.com/package/alisa.cache/)
